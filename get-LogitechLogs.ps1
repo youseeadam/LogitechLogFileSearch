@@ -62,7 +62,7 @@ foreach ($profilepath in $profiles.localpath) {
                 $NXPStatus = (Select-String -Path $fwupdate.FullName -Pattern 'NXP Subsystem Update *') | Select-Object -Last 1 | ConvertFrom-String | ConvertTo-Csv -NoTypeInformation
             }
         }  
-        New-Object psobject -Property @{devicename = "SmartDock"; AIT = ($AIT | convertFrom-csv)."P10"; NXP = (($NXP | convertFrom-csv)."P10"); AITStatus = ($AITStatus | ConvertFrom-Csv)."P8" -replace ":", ""; NXPStatus = ($NXPStatus | ConvertFrom-Csv)."P8" -replace ":", "" } | ConvertTo-Json -Compress | Out-File -FilePath $SmartDockLog -Encoding ascii -Append
+        New-Object psobject -Property @{devicename = "SmartDock"; AIT = (($AIT | convertFrom-csv)."P10"); NXP = (($NXP | convertFrom-csv)."P10"); AITStatus = ($AITStatus | ConvertFrom-Csv)."P8" -replace ":", ""; NXPStatus = ($NXPStatus | ConvertFrom-Csv)."P8" -replace ":", "" } | ConvertTo-Json -Compress | Out-File -FilePath $SmartDockLog -Encoding ascii -Append
     }
 }
 
