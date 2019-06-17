@@ -51,18 +51,20 @@ $profiles = (get-wmiobject win32_userprofile -Property localpath -Filter "LocalP
 SmartDock
 ################>
 $SerchStrings = "AIT Subsystem Package Version", "NXP Subsystem Package Version"
+
 foreach ($profilepath in $profiles.localpath) {
     if (test-path ($profilepath + "\appdata\Local\Temp\SmartDockUpdate*.log")) {
         Write-Output "SmartDock"
-        foreach ($fwupdate in get-childitem -path $TempDir -filter "SmartDockUpdate*.log" | Sort-Object LastWriteTime | Select-Object -Last 1) {
+        foreach ($fwupdate in get-childitem -path ($profilepath + "\appdata\Local\Temp\") -filter "SmartDockUpdate*.log" | Sort-Object LastWriteTime | Select-Object -Last 1) {
             foreach ($status in $SerchStrings) {
-                $AIT = (Select-String -Path $fwupdate.FullName -Pattern 'AIT Subsystem Package Version *') | Select-Object -Last 1 | ConvertFrom-String | ConvertTo-Csv -NoTypeInformation
-                $NXP = (Select-String -Path $fwupdate.FullName -Pattern 'NXP Subsystem Package Version *') | Select-Object -Last 1 | ConvertFrom-String | ConvertTo-Csv -NoTypeInformation
-                $AITStatus = (Select-String -Path $fwupdate.FullName -Pattern 'AIT Subsystem Update *') | Select-Object -Last 1 | ConvertFrom-String | ConvertTo-Csv -NoTypeInformation
-                $NXPStatus = (Select-String -Path $fwupdate.FullName -Pattern 'NXP Subsystem Update *') | Select-Object -Last 1 | ConvertFrom-String | ConvertTo-Csv -NoTypeInformation
+                $AIT = ((Select-String -Path $fwupdate.FullName -Pattern 'AIT Subsystem Package Version *') | Select-Object -Last 1 | ConvertFrom-String )."P11"  
+                $NXP = ((Select-String -Path $fwupdate.FullName -Pattern 'NXP Subsystem Package Version *') | Select-Object -Last 1 | ConvertFrom-String)."P10"
+                $AITStatus = ((Select-String -Path $fwupdate.FullName -Pattern 'Status') | Select-Object -First 1 | ConvertFrom-String)."P9"
+                $NXPStatus = ((Select-String -Path $fwupdate.FullName -Pattern 'Status') | Select-Object -Last 1 | ConvertFrom-String)."P9"
             }
+            
         }  
-        New-Object psobject -Property @{devicename = "SmartDock"; AIT = (($AIT | convertFrom-csv)."P10"); NXP = (($NXP | convertFrom-csv)."P10"); AITStatus = ($AITStatus | ConvertFrom-Csv)."P8" -replace ":", ""; NXPStatus = ($NXPStatus | ConvertFrom-Csv)."P8" -replace ":", "" } | ConvertTo-Json -Compress | Out-File -FilePath $SmartDockLog -Encoding ascii -Append
+        New-Object psobject -Property @{devicename = "SmartDock"; AIT =$AIT; NXP = $NXP; AITStatus =$AITStatus ; NXPStatus = $NXPStatus } | ConvertTo-Json -Compress | Out-File -FilePath $SmartDockLog -Encoding ascii -Append
     }
 }
 
