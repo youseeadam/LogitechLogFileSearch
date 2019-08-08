@@ -22,12 +22,12 @@
         SmartDock_CL | extend smartdock = parse_json(RawData) | project Computer,smartdock.NXP,smartdock.AIT,smartdock.NXPStatus,smartdock.AITStatus,smartdock.devicename
         MeetUp_CL | extend MeetUp = parse_json(RawData) | project Computer,MeetUp.ble,MeetUp.Audio,MeetUp.Video,MeetUp.eeprom,MeetUp.codec,MeetUp.devicename
         RallyCamera_CL | extend RallyCamera = parse_json(RawData) | project Computer,RallyCamera.video,RallyCamera.eeprom,RallyCamera.videoble,RallyCamera.devicename
-
+        RallySystem_CL | extend RallySystem = parse_json(RawData) | project Computer,RallySystem.tablehub,RallySystem.TableHub_Valens,RallySystem.video,RallySystem.eeprom,RallySystem.videoble,RallySystem.tvhub,RallySystem.tvhubble,RallySystem.TVHub_Valens,RallySystem.micpod33
 
 .NOTES
     Creates a JSON file of the format as example
     for SmartDock: File Name for ALA: c:\windows\temp\LogitechFirmware-*-SmartDock.json{, Content: "NXP":"2018.03.01.001","AIT":"0001.0001.0430","NXPStatus":"Failed","devicename":"SmartDock","AITStatus":"Failed"}
-    RBrio coming soon
+    Brio coming soon
     Becasue of limitations on ALA you cannot set a patch as c:\Windows\Temp\Logitech-*-SmartDock.json to the File Location
 
 .EXAMPLE 
@@ -42,7 +42,8 @@ $timestamp = (get-date -Format FileDateTime)
 $SmartDockLog = $tempdir + "\" + "LogitechFirmware-SmartDock" + $timestamp + ".json"
 $MeetupLog = $tempdir + "\" + "LogitechFirmware-MeetUp" + $timestamp + ".json"
 $RallyCameraLog = $tempdir + "\" + "LogitechFirmware-RallyCamera" + $timestamp + ".json"
-$BrioCameraLog = $tempdir + "\" + "LogitechFirmware-Brio" + $timestamp + ".json"
+$RallySystemLog = $tempdir + "\" + "LogitechFirmware-RallySystem" + $timestamp + ".json"
+#$BrioCameraLog = $tempdir + "\" + "LogitechFirmware-Brio" + $timestamp + ".json"
 
 #User Profile Paths
 $profiles = (get-wmiobject win32_userprofile -Property localpath -Filter "LocalPath like '%Users%'") | Select-Object localpath
@@ -51,20 +52,18 @@ $profiles = (get-wmiobject win32_userprofile -Property localpath -Filter "LocalP
 SmartDock
 ################>
 $SerchStrings = "AIT Subsystem Package Version", "NXP Subsystem Package Version"
-
 foreach ($profilepath in $profiles.localpath) {
     if (test-path ($profilepath + "\appdata\Local\Temp\SmartDockUpdate*.log")) {
         Write-Output "SmartDock"
-        foreach ($fwupdate in get-childitem -path ($profilepath + "\appdata\Local\Temp\") -filter "SmartDockUpdate*.log" | Sort-Object LastWriteTime | Select-Object -Last 1) {
+        foreach ($fwupdate in get-childitem -path $TempDir -filter "SmartDockUpdate*.log" | Sort-Object LastWriteTime | Select-Object -Last 1) {
             foreach ($status in $SerchStrings) {
-                $AIT = ((Select-String -Path $fwupdate.FullName -Pattern 'AIT Subsystem Package Version *') | Select-Object -Last 1 | ConvertFrom-String )."P11"  
-                $NXP = ((Select-String -Path $fwupdate.FullName -Pattern 'NXP Subsystem Package Version *') | Select-Object -Last 1 | ConvertFrom-String)."P10"
-                $AITStatus = ((Select-String -Path $fwupdate.FullName -Pattern 'Status') | Select-Object -First 1 | ConvertFrom-String)."P9"
-                $NXPStatus = ((Select-String -Path $fwupdate.FullName -Pattern 'Status') | Select-Object -Last 1 | ConvertFrom-String)."P9"
+                $AIT = (Select-String -Path $fwupdate.FullName -Pattern 'AIT Subsystem Package Version *') | Select-Object -Last 1 | ConvertFrom-String | ConvertTo-Csv -NoTypeInformation
+                $NXP = (Select-String -Path $fwupdate.FullName -Pattern 'NXP Subsystem Package Version *') | Select-Object -Last 1 | ConvertFrom-String | ConvertTo-Csv -NoTypeInformation
+                $AITStatus = (Select-String -Path $fwupdate.FullName -Pattern 'AIT Subsystem Update *') | Select-Object -Last 1 | ConvertFrom-String | ConvertTo-Csv -NoTypeInformation
+                $NXPStatus = (Select-String -Path $fwupdate.FullName -Pattern 'NXP Subsystem Update *') | Select-Object -Last 1 | ConvertFrom-String | ConvertTo-Csv -NoTypeInformation
             }
-            
         }  
-        New-Object psobject -Property @{devicename = "SmartDock"; AIT =$AIT; NXP = $NXP; AITStatus =$AITStatus ; NXPStatus = $NXPStatus } | ConvertTo-Json -Compress | Out-File -FilePath $SmartDockLog -Encoding ascii -Append
+        New-Object psobject -Property @{devicename = "SmartDock"; AIT = ($AIT | convertFrom-csv)."P10"; NXP = (($NXP | convertFrom-csv)."P10"); AITStatus = ($AITStatus | ConvertFrom-Csv)."P8" -replace ":", ""; NXPStatus = ($NXPStatus | ConvertFrom-Csv)."P8" -replace ":", "" } | ConvertTo-Json -Compress | Out-File -FilePath $SmartDockLog -Encoding ascii -Append
     }
 }
 
@@ -165,3 +164,71 @@ foreach ($profilepath in $profiles.localpath) {
 $global:rallycamerafw.add("devicename", "RallyCamera")
 $global:rallycamerafw | ConvertTo-Json -Compress | Out-File -FilePath $RallyCameraLog -Encoding ascii
 
+<###############
+Rally System
+################>
+$global:rallysystemfw = $null
+$global:rallysystemfw = @{ }
+
+function set-RallySystemSettings {
+    switch ($pattern) {
+        "Info:      tablehub" {
+            $deviceinfo = Get-Content $fwupdate.FullName | Select-Object -Index ($deviceinfo.linenumber + 1) | ConvertFrom-String  -Delimiter "`t" 
+            $global:rallysystemfw.add("tablehub", (($deviceinfo)."P2" -split ": ")[1])
+        }
+        "Info:      TableHub_Valens" {
+            $deviceinfo = Get-Content $fwupdate.FullName | Select-Object -Index ($deviceinfo.linenumber + 1) | ConvertFrom-String -Delimiter "`t" 
+            $global:rallysystemfw.add("TableHub_Valens", (($deviceinfo)."P2" -split ": ")[1])
+        }
+        "Info:      video" {
+            $deviceinfo = Get-Content $fwupdate.FullName | Select-Object -Index ($deviceinfo.linenumber + 1) | ConvertFrom-String -Delimiter "`t"
+            $global:rallysystemfw.add("video", (($deviceinfo)."P2" -split ": ")[1])
+        }
+        "Info:      eeprom" {
+            $deviceinfo = Get-Content $fwupdate.FullName | Select-Object -Index ($deviceinfo.linenumber + 1) | ConvertFrom-String -Delimiter "`t"
+            $global:rallysystemfw.add("eeprom", (($deviceinfo)."P2" -split ": ")[1])
+        }
+        "Info:      videoble" {
+            $deviceinfo = Get-Content $fwupdate.FullName | Select-Object -Index ($deviceinfo.linenumber + 1) | ConvertFrom-String -Delimiter "`t"
+            $global:rallysystemfw.add("videoble", (($deviceinfo)."P2" -split ": ")[1])
+        }
+        "Info:      tvhub" {
+            $deviceinfo = Get-Content $fwupdate.FullName | Select-Object -Index ($deviceinfo.linenumber + 1) | ConvertFrom-String -Delimiter "`t"
+            $global:rallysystemfw.add("tvhub", (($deviceinfo)."P2" -split ": ")[1])
+        }
+        "Info:      tvhubble" {
+            $deviceinfo = Get-Content $fwupdate.FullName | Select-Object -Index ($deviceinfo.linenumber + 1) | ConvertFrom-String -Delimiter "`t"
+            $global:rallysystemfw.add("tvhubble", (($deviceinfo)."P2" -split ": ")[1])
+        }
+        "Info:      TVHub_Valens" {
+            $deviceinfo = Get-Content $fwupdate.FullName | Select-Object -Index ($deviceinfo.linenumber + 1) | ConvertFrom-String -Delimiter "`t"
+            $global:rallysystemfw.add("TVHub_Valens", (($deviceinfo)."P2" -split ": ")[1])
+        }
+        "Info:      micpod 33" {
+            $deviceinfo = Get-Content $fwupdate.FullName | Select-Object -Index ($deviceinfo.linenumber + 1) | ConvertFrom-String -Delimiter "`t" 
+            $global:rallysystemfw.add("micpod33", (($deviceinfo)."P2" -split ": ")[1])
+        }
+    }
+}
+
+$fwupdates = "Info:      tablehub", "Info:      TableHub_Valens", "Info:      video", "Info:      eeprom", "Info:      videoble", "Info:      tvhub", "Info:      tvhubble", "Info:      TVHub_Valens", "Info:      micpod 33"
+foreach ($profilepath in $profiles.localpath) {
+    $logpath = $null
+    $logpath = ($profilepath + "\appdata\Local\Temp\LogiFWUpdate"), ($tempdir + "\LogiFWUpdate")
+    foreach ($logfile in $logpath) {
+        if (test-path $logfile) {
+            foreach ($fwupdate in get-childitem -path $logfile -Filter FWUpdateRally*.log | Sort-Object LastWriteTime | Select-Object -last 1) {
+                write-output "RallySystem"
+                foreach ($pattern in $fwupdates) {
+                    foreach ($deviceinfo in Select-String -Path $fwupdate.FullName -Pattern $pattern | Select-Object -Last 1) {
+                        set-RallySystemSettings
+                    }              
+                }
+            }
+        }
+    }
+}
+
+
+$global:rallysystemfw.add("devicename", "RallySystem")
+$global:rallysystemfw | ConvertTo-Json -Compress | Out-File -FilePath $RallySystemLog -Encoding ascii
